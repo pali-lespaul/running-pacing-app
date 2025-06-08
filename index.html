@@ -133,18 +133,6 @@
             background-color: var(--accent-color);
         }
 
-        #status {
-            font-size: 2rem;
-            font-weight: 600;
-            margin: 2rem 0;
-            text-align: center;
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
         #controls button {
             padding: 1rem 2rem;
             border: none;
@@ -179,37 +167,10 @@
             transform: translateY(0);
         }
 
-        .status-running {
-            background: linear-gradient(135deg, var(--accent-color), #22c55e);
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .status-walking {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        .status-stopped {
-            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-
-        #controls {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-        }
-
         .countdown-container {
             position: relative;
-            width: 120px;
-            height: 120px;
+            width: 240px;
+            height: 240px;
             margin: 1rem auto;
         }
 
@@ -218,7 +179,7 @@
         }
 
         .countdown-circle-bg {
-            stroke-dasharray: 339.292;
+            stroke-dasharray: 678.584;
             stroke-dashoffset: 0;
         }
 
@@ -231,33 +192,50 @@
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            font-size: 1.5rem;
+            text-align: center;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .countdown-mode {
+            font-size: 1.2rem;
             font-weight: 600;
-            color: var(--text-color);
+            margin-bottom: 0.5rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
-        .status-running .countdown-circle {
-            stroke: var(--accent-color);
+        .countdown-timer {
+            font-size: 2.5rem;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
         }
 
-        .status-walking .countdown-circle {
-            stroke: #f59e0b;
+        .status-running .countdown-mode,
+        .status-running .countdown-timer {
+            background: linear-gradient(135deg, var(--accent-color), #22c55e);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        .status-stopped .countdown-circle {
-            stroke: var(--primary-color);
+        .status-walking .countdown-mode,
+        .status-walking .countdown-timer {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        .status-running .countdown-text {
-            color: var(--accent-color);
-        }
-
-        .status-walking .countdown-text {
-            color: #f59e0b;
-        }
-
-        .status-stopped .countdown-text {
-            color: var(--primary-color);
+        .status-stopped .countdown-mode,
+        .status-stopped .countdown-timer {
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .more-settings {
@@ -509,18 +487,18 @@
             </div>
         </div>
         
-       
-
         <div id="beatIndicator"></div>
-        <div id="status" class="status-stopped">Stopped</div>
 
         <!-- Add circular countdown timer -->
         <div class="countdown-container">
-            <svg class="countdown" width="120" height="120" viewbox="0 0 120 120">
-                <circle class="countdown-circle-bg" cx="60" cy="60" r="54" fill="none" stroke="rgba(255, 255, 255, 0.1)" stroke-width="12"/>
-                <circle class="countdown-circle" cx="60" cy="60" r="54" fill="none" stroke-width="12" stroke="var(--primary-color)" stroke-dasharray="339.292" stroke-dashoffset="339.292"/>
+            <svg class="countdown" width="240" height="240" viewbox="0 0 240 240">
+                <circle class="countdown-circle-bg" cx="120" cy="120" r="108" fill="none" stroke="rgba(255, 255, 255, 0.1)" stroke-width="12"/>
+                <circle class="countdown-circle" cx="120" cy="120" r="108" fill="none" stroke-width="12" stroke="var(--primary-color)" stroke-dasharray="678.584" stroke-dashoffset="678.584"/>
             </svg>
-            <div class="countdown-text">00:00</div>
+            <div class="countdown-text">
+                <div class="countdown-mode">Ready</div>
+                <div class="countdown-timer">00:00</div>
+            </div>
         </div>
 
         <div id="controls">
@@ -624,7 +602,6 @@
             beepGain.gain.value = volume * 0.5; // Scale down volume for beeps
         });
 
-        const statusElement = document.getElementById('status');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const walkTimeInput = document.getElementById('walkTime');
@@ -757,13 +734,11 @@
                 walkTime = parseInt(walkTimeInput.value) * 60;
                 runTime = parseInt(runTimeInput.value) * 60;
                 currentMode = 'walk';
-                statusElement.textContent = 'Stopped';
-                statusElement.className = 'status-stopped';
                 
                 // Reset countdown timer
                 const circle = document.querySelector('.countdown-circle');
                 if (circle) {
-                    circle.style.strokeDashoffset = 339.292;
+                    circle.style.strokeDashoffset = 678.584; // 2 * π * 108 (radius)
                 }
             }
         }
@@ -864,48 +839,34 @@
             const minutes = Math.floor(timeLeft / 60);
             const seconds = timeLeft % 60;
             
-            console.log('Updating status:', {
-                mode: currentMode,
-                timeLeft,
-                minutes,
-                seconds
-            });
-            
-            // Update text status
-            statusElement.textContent = `${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}: ${minutes}:${seconds.toString().padStart(2, '0')}`;
-            statusElement.className = `status-${currentMode}`;
-            
             // Update countdown timer
+            const countdownText = document.querySelector('.countdown-text');
+            const countdownTimer = document.querySelector('.countdown-timer');
+            const countdownMode = document.querySelector('.countdown-mode');
             const circle = document.querySelector('.countdown-circle');
-            const text = document.querySelector('.countdown-text');
             
-            if (circle && text) {
-                // Calculate progress
-                const totalSeconds = currentMode === 'walk' ? parseInt(walkTimeInput.value) * 60 : parseInt(runTimeInput.value) * 60;
+            if (circle && countdownText && countdownTimer && countdownMode) {
+                const totalSeconds = currentMode === 'walk' ? (parseInt(walkTimeInput.value) * 60) : (parseInt(runTimeInput.value) * 60);
                 const progress = (totalSeconds - timeLeft) / totalSeconds;
-                console.log('Progress:', progress);
-                
-                // Calculate dash offset
-                const dashOffset = 339.292 * (1 - progress);
-                console.log('Dash offset:', dashOffset);
                 
                 // Update circle
-                circle.style.strokeDashoffset = dashOffset;
+                circle.style.strokeDashoffset = 678.584 * (1 - progress);
                 
                 // Update text
-                text.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
-                text.className = `countdown-text status-${currentMode}`;
+                const modeText = currentMode === 'walk' ? 'WALK' : 'RUN';
+                countdownMode.textContent = modeText;
+                countdownTimer.textContent = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+                
+                // Update classes for styling
+                countdownText.className = `countdown-text status-${currentMode}`;
             }
         }
-
-        // Initial status
-        updateStatus();
 
         // Initialize countdown circle on load
         document.addEventListener('DOMContentLoaded', () => {
             const circle = document.querySelector('.countdown-circle');
             if (circle) {
-                circle.style.strokeDashoffset = 339.292;
+                circle.style.strokeDashoffset = 678.584;
                 console.log('Initialized countdown circle');
             }
         });
