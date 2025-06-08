@@ -564,6 +564,8 @@
         let beepAudioContext;
         let beepGain;
         let isBeepAudioInitialized = false;
+        let silentNode; // For iOS background audio
+        let audioStreamDestination; // For iOS background audio
 
         function initializeBeepAudio() {
             if (isBeepAudioInitialized) return;
@@ -571,18 +573,66 @@
             try {
                 // Create audio context
                 beepAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Create silent node for iOS background audio
+                silentNode = beepAudioContext.createGain();
+                silentNode.gain.value = 0;
+                
+                // Create a MediaStreamDestination for iOS
+                if (beepAudioContext.createMediaStreamDestination) {
+                    audioStreamDestination = beepAudioContext.createMediaStreamDestination();
+                    silentNode.connect(audioStreamDestination);
+                }
+                
+                // Connect silent node to destination
+                silentNode.connect(beepAudioContext.destination);
+                
+                // Start silent node (required for iOS)
+                if (beepAudioContext.state === 'suspended') {
+                    beepAudioContext.resume();
+                }
+                
                 beepGain = beepAudioContext.createGain();
                 beepGain.gain.value = 1; // Full volume
                 beepGain.connect(beepAudioContext.destination);
+                
                 isBeepAudioInitialized = true;
+                
+                // Keep audio alive on iOS
+                if (/(iPhone|iPad|iPod)/i.test(navigator.userAgent)) {
+                    keepAudioAlive();
+                }
+                
             } catch (e) {
                 console.error('Beep audio initialization failed:', e);
             }
         }
-
-        // Initialize audio on any user interaction
-        document.addEventListener('click', initializeBeepAudio, { once: true });
-        document.addEventListener('touchstart', initializeBeepAudio, { once: true });
+        
+        // Function to keep audio alive on iOS
+        function keepAudioAlive() {
+            if (!beepAudioContext) return;
+            
+            // Create a silent oscillator
+            const oscillator = beepAudioContext.createOscillator();
+            oscillator.frequency.value = 0.1; // Inaudible frequency
+            
+            const gainNode = beepAudioContext.createGain();
+            gainNode.gain.value = 0; // Silent
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(beepAudioContext.destination);
+            
+            // Start the oscillator (it's silent)
+            oscillator.start();
+            
+            // Keep a reference to prevent garbage collection
+            window._keepAliveAudio = { oscillator, gainNode };
+            
+            // Resume context if suspended
+            if (beepAudioContext.state === 'suspended') {
+                beepAudioContext.resume();
+            }
+        }
 
         function createBeepOscillator() {
             if (!isBeepAudioInitialized) initializeBeepAudio();
