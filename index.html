@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Running Pacing App - Interval Timer for Run/Walk Training</title>
+    
+    <!-- SEO Meta Tags -->
+    <meta name="description" content="A free running pacing app that helps you alternate between running and walking intervals with a built-in metronome. Perfect for interval training and recovery runs.">
+    <meta name="keywords" content="running, walking, interval training, metronome, running app, workout timer, running pace">
+    <meta name="author" content="Your Name">
+    <meta name="theme-color" content="#4CAF50">
+    
+    <!-- Open Graph Meta Tags -->
+    <meta property="og:title" content="Running Pacing App">
+    <meta property="og:description" content="A free running pacing app that helps you alternate between running and walking intervals with a built-in metronome. Perfect for interval training and recovery runs.">
+    <meta property="og:type" content="website">
+    
+    <!-- PWA Manifest -->
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Favicon -->
+    <link rel="apple-touch-icon" sizes="180x180" href="favicon/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon/favicon-16x16.png">
+    <link rel="manifest" href="favicon/site.webmanifest">
+    <link rel="mask-icon" href="favicon/safari-pinned-tab.svg" color="#4CAF50">
+    <meta name="msapplication-TileColor" content="#4CAF50">
+    <meta name="theme-color" content="#4CAF50">
+    
+    <!-- Styles -->
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .timer-input {
+            margin: 10px 0;
+        }
+
+        .timer-input label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .timer-input input {
+            width: 100px;
+            padding: 5px;
+            margin-right: 10px;
+        }
+
+        #status {
+            font-size: 24px;
+            font-weight: bold;
+            margin: 20px 0;
+            text-align: center;
+        }
+
+        #controls button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+            border: none;
+            border-radius: 4px;
+        }
+
+        #startButton {
+            background-color: #4CAF50;
+            color: white;
+        }
+
+        #stopButton {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .status-running {
+            color: #4CAF50;
+        }
+
+        .status-walking {
+            color: #2196F3;
+        }
+
+        .status-stopped {
+            color: #f44336;
+        }
+    </style>
+    <!-- Add manifest.json to the head -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/service-worker.js')
+                .then(() => console.log('Service Worker Registered'))
+                .catch(err => console.log('Service Worker Error:', err));
+        }
+    </script>
+</head>
+<body>
+    <div class="container">
+        <h1>Running Pacing App</h1>
+        
+        <div class="timer-input">
+            <label>Walking Time (minutes):</label>
+            <input type="number" id="walkTime" min="1" value="5">
+        </div>
+        
+        <div class="timer-input">
+            <label>Running Time (minutes):</label>
+            <input type="number" id="runTime" min="1" value="3">
+        </div>
+        
+        <div class="timer-input">
+            <label>Metronome BPM:</label>
+            <input type="number" id="metronome" min="40" max="250" value="180">
+        </div>
+        
+        <div id="status" class="status-stopped">Stopped</div>
+        
+        <div id="controls">
+            <button id="startButton">Start</button>
+            <button id="stopButton">Stop</button>
+        </div>
+    </div>
+
+    <script>
+        // Audio elements
+        const beepSound = new Audio('src/beep.mp3');
+        const metronomeSound = new Audio('src/metronome.mp3');
+
+        let walkTime = 5 * 60; // 5 minutes in seconds
+        let runTime = 3 * 60; // 3 minutes in seconds
+        let currentMode = 'walk';
+        let isRunning = false;
+        let intervalId;
+        let metronomeId;
+        let currentMetronomeBPM = 180;
+
+        const statusElement = document.getElementById('status');
+        const startButton = document.getElementById('startButton');
+        const stopButton = document.getElementById('stopButton');
+        const walkTimeInput = document.getElementById('walkTime');
+        const runTimeInput = document.getElementById('runTime');
+        const metronomeInput = document.getElementById('metronome');
+
+        // Update times when inputs change
+        walkTimeInput.addEventListener('change', () => {
+            walkTime = parseInt(walkTimeInput.value) * 60;
+        });
+
+        runTimeInput.addEventListener('change', () => {
+            runTime = parseInt(runTimeInput.value) * 60;
+        });
+
+        metronomeInput.addEventListener('change', () => {
+            currentMetronomeBPM = parseInt(metronomeInput.value);
+            if (isRunning) {
+                startMetronome();
+            }
+        });
+
+        startButton.addEventListener('click', start);
+        stopButton.addEventListener('click', stop);
+
+        function start() {
+            if (!isRunning) {
+                isRunning = true;
+                startButton.disabled = true;
+                stopButton.disabled = false;
+                
+                // Initialize times based on input values
+                walkTime = parseInt(walkTimeInput.value) * 60;
+                runTime = parseInt(runTimeInput.value) * 60;
+                currentMode = 'walk';
+                
+                // Start metronome
+                startMetronome();
+                
+                // Start timer
+                intervalId = setInterval(() => {
+                    if (currentMode === 'walk') {
+                        walkTime--;
+                        updateStatus();
+                        if (walkTime <= 0) {
+                            beepSound.play();
+                            currentMode = 'run';
+                            runTime = parseInt(runTimeInput.value) * 60;
+                        }
+                    } else {
+                        runTime--;
+                        updateStatus();
+                        if (runTime <= 0) {
+                            beepSound.play();
+                            currentMode = 'walk';
+                            walkTime = parseInt(walkTimeInput.value) * 60;
+                        }
+                    }
+                }, 1000);
+            }
+        }
+
+        function stop() {
+            if (isRunning) {
+                isRunning = false;
+                startButton.disabled = false;
+                stopButton.disabled = true;
+                
+                clearInterval(intervalId);
+                clearInterval(metronomeId);
+                
+                // Reset times and mode
+                walkTime = parseInt(walkTimeInput.value) * 60;
+                runTime = parseInt(runTimeInput.value) * 60;
+                currentMode = 'walk';
+                statusElement.textContent = 'Stopped';
+                statusElement.className = 'status-stopped';
+            }
+        }
+
+        function startMetronome() {
+            clearInterval(metronomeId);
+            const interval = 60000 / currentMetronomeBPM; // Convert BPM to milliseconds
+            metronomeId = setInterval(() => {
+                metronomeSound.play();
+            }, interval);
+        }
+
+        function updateStatus() {
+            const timeLeft = currentMode === 'walk' ? walkTime : runTime;
+            const minutes = Math.floor(timeLeft / 60);
+            const seconds = timeLeft % 60;
+            
+            statusElement.textContent = `${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}: ${minutes}:${seconds.toString().padStart(2, '0')}`;
+            statusElement.className = `status-${currentMode}`;
+        }
+
+        // Initial status
+        updateStatus();
+    </script>
+</body>
+</html>
