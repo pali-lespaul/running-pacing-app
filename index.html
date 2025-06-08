@@ -459,12 +459,36 @@
             }
         }
     </style>
-    <!-- Add manifest.json to the head -->
+    <!-- Service Worker Registration -->
     <script>
         if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then(() => console.log('Service Worker Registered'))
-                .catch(err => console.log('Service Worker Error:', err));
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/service-worker.js', { scope: '/' })
+                    .then(registration => {
+                        console.log('Service Worker registered with scope:', registration.scope);
+                        
+                        // Check for updates
+                        registration.update().then(() => {
+                            console.log('Service Worker update check completed');
+                        }).catch(error => {
+                            console.log('Service Worker update check failed:', error);
+                        });
+                    })
+                    .catch(error => {
+                        console.error('Service Worker registration failed:', error);
+                    });
+                
+                // Handle controller changes (when a new service worker takes over)
+                let refreshing = false;
+                navigator.serviceWorker.addEventListener('controllerchange', () => {
+                    if (!refreshing) {
+                        window.location.reload();
+                        refreshing = true;
+                    }
+                });
+            });
+        } else {
+            console.warn('Service workers are not supported in this browser.');
         }
     </script>
 </head>
@@ -634,6 +658,46 @@
             }
         }
 
+        async function playBeep() {
+            try {
+                if (!isBeepAudioInitialized) {
+                    initializeBeepAudio();
+                }
+                
+                // Ensure audio context is running (critical for iOS)
+                if (beepAudioContext && beepAudioContext.state === 'suspended') {
+                    await beepAudioContext.resume();
+                }
+                
+                const beep = createBeepOscillator();
+                if (!beep) return;
+                
+                // Start the oscillator
+                beep.oscillator.start();
+                
+                // Stop the oscillator after 900ms
+                beep.oscillator.stop(beepAudioContext.currentTime + 0.9);
+                
+                // Clean up
+                setTimeout(() => {
+                    beep.oscillator.disconnect();
+                    beep.gainNode.disconnect();
+                }, 950);
+                
+            } catch (e) {
+                console.error('Error playing beep:', e);
+                
+                // Fallback to using the Web Speech API if Web Audio fails
+                try {
+                    const utterance = new SpeechSynthesisUtterance('beep');
+                    utterance.volume = 1;
+                    speechSynthesis.speak(utterance);
+                } catch (speechErr) {
+                    console.error('Fallback beep failed:', speechErr);
+                }
+            }
+        }
+
         function createBeepOscillator() {
             if (!isBeepAudioInitialized) initializeBeepAudio();
             
@@ -663,39 +727,6 @@
             } catch (e) {
                 console.error('Error creating beep oscillator:', e);
                 return null;
-            }
-        }
-
-        function playBeep() {
-            try {
-                if (!isBeepAudioInitialized) initializeBeepAudio();
-                
-                const beep = createBeepOscillator();
-                if (!beep) return;
-                
-                // Start the oscillator
-                beep.oscillator.start();
-                
-                // Stop the oscillator after 900ms
-                beep.oscillator.stop(beepAudioContext.currentTime + 0.9);
-                
-                // Clean up
-                setTimeout(() => {
-                    beep.oscillator.disconnect();
-                    beep.gainNode.disconnect();
-                }, 950);
-                
-            } catch (e) {
-                console.error('Error playing beep:', e);
-                
-                // Fallback to using the Web Speech API if Web Audio fails
-                try {
-                    const utterance = new SpeechSynthesisUtterance('beep');
-                    utterance.volume = 1;
-                    speechSynthesis.speak(utterance);
-                } catch (speechErr) {
-                    console.error('Fallback beep failed:', speechErr);
-                }
             }
         }
 
@@ -816,6 +847,11 @@
                 startButton.disabled = true;
                 stopButton.disabled = false;
                 
+                // Initialize audio context if not already done
+                if (!isBeepAudioInitialized) {
+                    initializeBeepAudio();
+                }
+                
                 // Initialize times
                 walkTime = parseInt(walkTimeInput.value) * 60;
                 runTime = parseInt(runTimeInput.value) * 60;
@@ -825,14 +861,14 @@
                 metronomeStartTime = null;
                 
                 // Start interval timer
-                intervalId = setInterval(() => {
+                intervalId = setInterval(async () => {
                     if (currentMode === 'walk') {
                         walkTime--;
                         if (walkTime <= 0) {
                             // Reset walk time and switch to run
                             walkTime = parseInt(walkTimeInput.value) * 60;
                             currentMode = 'run';
-                            playBeep();
+                            await playBeep(); // Wait for beep to complete
                             
                             // Reset metronome start time when switching to run
                             metronomeStartTime = null;
@@ -843,7 +879,7 @@
                             // Reset run time and switch to walk
                             runTime = parseInt(runTimeInput.value) * 60;
                             currentMode = 'walk';
-                            playBeep();
+                            await playBeep(); // Wait for beep to complete
                         }
                     }
                     updateStatus();
