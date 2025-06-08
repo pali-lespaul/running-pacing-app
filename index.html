@@ -342,6 +342,72 @@
             transform: scale(1.1);
         }
 
+        .number-input {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+
+        .number-input input[type="number"] {
+            -moz-appearance: textfield;
+            text-align: center;
+            padding: 0.75rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: var(--border-radius);
+            background-color: var(--hover-color);
+            color: var(--text-color);
+            font-size: 1rem;
+            width: 80px;
+        }
+
+        .number-input input[type="number"]::-webkit-outer-spin-button,
+        .number-input input[type="number"]::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+
+        .number-btn {
+            padding: 0.5rem 1rem;
+            border: none;
+            border-radius: var(--border-radius);
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            color: white;
+            font-size: 1rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2.5rem;
+        }
+
+        .number-btn:active {
+            transform: scale(0.95);
+        }
+
+        .number-btn:focus {
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.5);
+        }
+
+        @media (max-width: 480px) {
+            .number-input {
+                width: 100%;
+                justify-content: space-between;
+            }
+            
+            .number-input input[type="number"] {
+                flex: 1;
+                max-width: 100px;
+            }
+            
+            .number-btn {
+                padding: 0.5rem 0.75rem;
+            }
+        }
+
         @media (prefers-color-scheme: light) {
             :root {
                 --background-color: #ffffff;
@@ -374,18 +440,30 @@
         <h1>Running Pacing App</h1>
         
         <div class="timer-input">
-            <label>Walking Time (minutes):</label>
-            <input type="number" id="walkTime" min="1" value="3">
+            <label for="walkTime">Walking Time (minutes):</label>
+            <div class="number-input">
+                <button class="number-btn" data-target="walkTime" data-action="decrease">-</button>
+                <input type="number" id="walkTime" name="walkTime" min="1" max="60" value="3" readonly>
+                <button class="number-btn" data-target="walkTime" data-action="increase">+</button>
+            </div>
         </div>
         
         <div class="timer-input">
-            <label>Running Time (minutes):</label>
-            <input type="number" id="runTime" min="1" value="6">
+            <label for="runTime">Running Time (minutes):</label>
+            <div class="number-input">
+                <button class="number-btn" data-target="runTime" data-action="decrease">-</button>
+                <input type="number" id="runTime" name="runTime" min="1" max="60" value="6" readonly>
+                <button class="number-btn" data-target="runTime" data-action="increase">+</button>
+            </div>
         </div>
         
         <div class="timer-input">
-            <label>Metronome BPM:</label>
-            <input type="number" id="metronome" min="40" max="250" value="170">
+            <label for="metronome">Metronome BPM:</label>
+            <div class="number-input">
+                <button class="number-btn" data-target="metronome" data-action="decrease">-10</button>
+                <input type="number" id="metronome" name="metronome" min="40" max="250" step="5" value="170" readonly>
+                <button class="number-btn" data-target="metronome" data-action="increase">+10</button>
+            </div>
         </div>
         
        
@@ -787,6 +865,31 @@
                 circle.style.strokeDashoffset = 339.292;
                 console.log('Initialized countdown circle');
             }
+        });
+
+        // Number input controls
+        document.querySelectorAll('.number-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const targetId = this.getAttribute('data-target');
+                const action = this.getAttribute('data-action');
+                const input = document.getElementById(targetId);
+                let value = parseInt(input.value);
+                const min = parseInt(input.min) || 1;
+                const max = parseInt(input.max) || 100;
+                const step = parseInt(input.step) || 1;
+                
+                if (action === 'increase') {
+                    value = Math.min(value + (targetId === 'metronome' ? 10 : 1), max);
+                } else {
+                    value = Math.max(value - (targetId === 'metronome' ? 10 : 1), min);
+                }
+                
+                input.value = value;
+                
+                // Trigger change event to update the app
+                const event = new Event('change');
+                input.dispatchEvent(event);
+            });
         });
     </script>
 </body>
