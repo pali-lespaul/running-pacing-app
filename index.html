@@ -449,13 +449,66 @@
         let isAudioInitialized = false;
         let metronomeStartTime = null;
 
+        // Create a dedicated audio context for beeps
+        const beepAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let beepGain = beepAudioContext.createGain();
+        beepGain.gain.value = 0.5; // Lower volume for beeps
+        beepGain.connect(beepAudioContext.destination);
+
+        // Create beep oscillator
+        function createBeepOscillator() {
+            const oscillator = beepAudioContext.createOscillator();
+            oscillator.type = 'sine';
+            oscillator.frequency.value = 1000; // 1kHz beep
+            oscillator.connect(beepGain);
+            return oscillator;
+        }
+
+        // Play a beep sound
+        function playBeep() {
+            const oscillator = createBeepOscillator();
+            oscillator.start();
+            oscillator.stop(beepAudioContext.currentTime + 0.7); // 700ms beep
+        }
+
+        // Initialize metronome audio context
+        function initializeAudioContext() {
+            if (!isAudioInitialized) {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Create gain node with reduced volume
+                metronomeGain = audioContext.createGain();
+                metronomeGain.gain.value = 0.3; // Reduced volume
+                metronomeGain.connect(audioContext.destination);
+                
+                // Create metronome oscillator
+                metronomeOscillator = audioContext.createOscillator();
+                metronomeOscillator.type = 'sine';
+                metronomeOscillator.frequency.value = 440; // A4 note
+                metronomeOscillator.connect(metronomeGain);
+                
+                isAudioInitialized = true;
+            }
+        }
+
+        // Add touch/click event listeners for mobile initialization
+        document.addEventListener('touchstart', initializeAudioContext, { once: true });
+        document.addEventListener('click', initializeAudioContext, { once: true });
+
+        // Update volume when slider changes
+        const volumeSlider = document.getElementById('volume');
+        volumeSlider.addEventListener('input', () => {
+            let volume = volumeSlider.value / 100;
+            metronomeGain.gain.value = volume * 0.3; // Scale down volume for metronome
+            beepGain.gain.value = volume * 0.5; // Scale down volume for beeps
+        });
+
         const statusElement = document.getElementById('status');
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
         const walkTimeInput = document.getElementById('walkTime');
         const runTimeInput = document.getElementById('runTime');
         const metronomeInput = document.getElementById('metronome');
-        const volumeSlider = document.getElementById('volume');
         const moreSettings = document.getElementById('moreSettings');
         const moreSettingsToggle = document.querySelector('.more-settings-toggle');
         const moreSettingsContent = document.getElementById('moreSettingsContent');
@@ -464,7 +517,6 @@
         let runTime = parseInt(runTimeInput.value) * 60;
         let currentMode = 'walk';
         let currentMetronomeBPM = parseInt(metronomeInput.value);
-        let volume = 0.8; // Default volume
         let isMetronomeWalking = false;
         let isMetronome20s = true;
         
@@ -478,31 +530,6 @@
         // Collapsible element - Initialize as collapsed
         moreSettings.setAttribute('aria-expanded', 'false');
 
-
-        // Initialize audio context on user interaction
-        function initializeAudioContext() {
-            if (!isAudioInitialized) {
-                // Create audio context
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
-                // Create gain node
-                metronomeGain = audioContext.createGain();
-                metronomeGain.gain.value = 0.6; // Very low volume
-                metronomeGain.connect(audioContext.destination);
-                
-                // Create a dummy oscillator to unlock audio
-                const unlockOsc = audioContext.createOscillator();
-                unlockOsc.connect(metronomeGain);
-                unlockOsc.start();
-                unlockOsc.stop(audioContext.currentTime + 0.01);
-                
-                isAudioInitialized = true;
-            }
-        }
-
-        // Add touch/click event listeners for mobile initialization
-        document.addEventListener('touchstart', initializeAudioContext, { once: true });
-        document.addEventListener('click', initializeAudioContext, { once: true });
 
         // Update times when inputs change
         walkTimeInput.addEventListener('change', () => {
@@ -540,11 +567,6 @@
                 stopMetronome();
                 startMetronome();
             }
-        });
-
-        volumeSlider.addEventListener('input', () => {
-            volume = volumeSlider.value / 100;
-            metronomeGain.gain.value = volume;
         });
 
         startButton.addEventListener('click', start);
@@ -628,23 +650,6 @@
         // Add beat indicator
         const beatIndicator = document.getElementById('beatIndicator');
 
-        // Add beep sound for mode transitions
-        function playBeep() {
-            const beepOscillator = audioContext.createOscillator();
-            beepOscillator.type = 'sine';
-            beepOscillator.frequency.setValueAtTime(1000, audioContext.currentTime);
-            
-            const gainNode = audioContext.createGain();
-            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
-            
-            beepOscillator.connect(gainNode);
-            gainNode.connect(audioContext.destination);
-            
-            beepOscillator.start();
-            beepOscillator.stop(audioContext.currentTime + 0.7); // 0.7 second duration
-        }
-
-        // Start metronome
         function startMetronome() {
             isMetronomePlaying = true;
             const interval = 60000 / currentMetronomeBPM; // Convert BPM to milliseconds
@@ -687,7 +692,7 @@
                 
                 // Create gain node for volume control
                 const volumeNode = audioContext.createGain();
-                volumeNode.gain.value = volume / 100 * 0.8; // Make it more subtle (0-0.8 instead of 0-1)
+                volumeNode.gain.value = 0.3; // Make it more subtle (0-0.8 instead of 0-1)
                 
                 // Connect nodes
                 metronomeOscillator.connect(filter1);
