@@ -789,6 +789,43 @@
         let isMetronomeWalking = false;
         let isMetronome20s = true;
         
+        // Wake Lock variables
+        let wakeLock = null;
+        
+        // Function to request screen wake lock
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('Screen Wake Lock active');
+                    
+                    // Listen for release (happens when tab becomes inactive or document becomes hidden)
+                    wakeLock.addEventListener('release', () => {
+                        console.log('Screen Wake Lock was released');
+                    });
+                }
+            } catch (err) {
+                console.error(`Error requesting wake lock: ${err.name}, ${err.message}`);
+            }
+        }
+        
+        // Function to release wake lock
+        function releaseWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release()
+                    .then(() => {
+                        wakeLock = null;
+                        console.log('Screen Wake Lock released');
+                    });
+            }
+        }
+        
+        // Re-request wake lock when page becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible' && isRunning) {
+                requestWakeLock();
+            }
+        });
 
         // Add Collapsible element at the end of the screen
         moreSettingsToggle.addEventListener('click', () => {
@@ -841,11 +878,14 @@
         startButton.addEventListener('click', start);
         stopButton.addEventListener('click', stop);
 
-        function start() {
+        async function start() {
             if (!isRunning) {
                 isRunning = true;
                 startButton.disabled = true;
                 stopButton.disabled = false;
+                
+                // Request wake lock when starting
+                await requestWakeLock();
                 
                 // Initialize audio context if not already done
                 if (!isBeepAudioInitialized) {
@@ -896,6 +936,9 @@
                 isMetronomePlaying = false;
                 startButton.disabled = false;
                 stopButton.disabled = true;
+                
+                // Release wake lock when stopping
+                releaseWakeLock();
                 
                 // Stop interval timer
                 clearInterval(intervalId);
