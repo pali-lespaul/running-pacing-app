@@ -1,6 +1,13 @@
 {
   "name": "Running Pacing App",
-  "short_name": "Run Pacing",
+  "short_name": "RunPacer",
+  "description": "A running and walking interval timer with metronome",
+  "start_url": "/index.html",
+  "display": "standalone",
+  "background_color": "#1a1a2e",
+  "theme_color": "#4CAF50",
+  "orientation": "portrait",
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/favicon/android-chrome-192x192.png",
@@ -13,7 +20,20 @@
       "type": "image/png"
     }
   ],
-  "theme_color": "#4CAF50",
-  "background_color": "#ffffff",
-  "display": "standalone"
+  "related_applications": [],
+  "scope": "/",
+  "categories": ["health", "fitness", "lifestyle"],
+  "screenshots": [],
+  "shortcuts": [],
+  "background": {
+    "scripts": ["service-worker.js"],
+    "persistent": true
+  },
+  "serviceworker": {
+    "src": "/service-worker.js",
+    "scope": "/",
+    "type": ""
+  },
+  "gcm_sender_id": "",
+  "gcm_user_visible_only": true
 }
