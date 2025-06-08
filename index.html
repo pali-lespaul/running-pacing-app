@@ -452,7 +452,7 @@
         // Create a dedicated audio context for beeps
         const beepAudioContext = new (window.AudioContext || window.webkitAudioContext)();
         let beepGain = beepAudioContext.createGain();
-        beepGain.gain.value = 0.5; // Lower volume for beeps
+        beepGain.gain.value = 0.7; // Lower volume for beeps
         beepGain.connect(beepAudioContext.destination);
 
         // Create beep oscillator
@@ -478,7 +478,7 @@
                 
                 // Create gain node with reduced volume
                 metronomeGain = audioContext.createGain();
-                metronomeGain.gain.value = 0.3; // Reduced volume
+                metronomeGain.gain.value = 0.6; // Reduced volume
                 metronomeGain.connect(audioContext.destination);
                 
                 // Create metronome oscillator
