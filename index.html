@@ -572,7 +572,7 @@
                 // Create audio context
                 beepAudioContext = new (window.AudioContext || window.webkitAudioContext)();
                 beepGain = beepAudioContext.createGain();
-                beepGain.gain.value = 1; // Lower volume for beeps
+                beepGain.gain.value = 1; // Full volume
                 beepGain.connect(beepAudioContext.destination);
                 isBeepAudioInitialized = true;
             } catch (e) {
@@ -593,11 +593,23 @@
                     beepAudioContext.resume();
                 }
                 
+                // Create a new oscillator for each beep (better for iOS)
                 const oscillator = beepAudioContext.createOscillator();
+                const gainNode = beepAudioContext.createGain();
+                
                 oscillator.type = 'sine';
-                oscillator.frequency.value = 1000; // 1kHz beep
-                oscillator.connect(beepGain);
-                return oscillator;
+                oscillator.frequency.setValueAtTime(1000, beepAudioContext.currentTime); // 1kHz beep
+                
+                // Create an envelope for the beep
+                gainNode.gain.setValueAtTime(0, beepAudioContext.currentTime);
+                gainNode.gain.linearRampToValueAtTime(1, beepAudioContext.currentTime + 0.01);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, beepAudioContext.currentTime + 0.9);
+                
+                // Connect nodes
+                oscillator.connect(gainNode);
+                gainNode.connect(beepAudioContext.destination);
+                
+                return { oscillator, gainNode };
             } catch (e) {
                 console.error('Error creating beep oscillator:', e);
                 return null;
@@ -606,13 +618,34 @@
 
         function playBeep() {
             try {
-                const oscillator = createBeepOscillator();
-                if (!oscillator) return;
+                if (!isBeepAudioInitialized) initializeBeepAudio();
                 
-                oscillator.start();
-                oscillator.stop(beepAudioContext.currentTime + 0.9); // 900ms beep
+                const beep = createBeepOscillator();
+                if (!beep) return;
+                
+                // Start the oscillator
+                beep.oscillator.start();
+                
+                // Stop the oscillator after 900ms
+                beep.oscillator.stop(beepAudioContext.currentTime + 0.9);
+                
+                // Clean up
+                setTimeout(() => {
+                    beep.oscillator.disconnect();
+                    beep.gainNode.disconnect();
+                }, 950);
+                
             } catch (e) {
                 console.error('Error playing beep:', e);
+                
+                // Fallback to using the Web Speech API if Web Audio fails
+                try {
+                    const utterance = new SpeechSynthesisUtterance('beep');
+                    utterance.volume = 1;
+                    speechSynthesis.speak(utterance);
+                } catch (speechErr) {
+                    console.error('Fallback beep failed:', speechErr);
+                }
             }
         }
 
@@ -627,7 +660,7 @@
             try {
                 // Create gain node with reduced volume
                 metronomeGainNode = metronomeAudioContext.createGain();
-                metronomeGainNode.gain.value = 0.6; // Reduced volume
+                metronomeGainNode.gain.value = 0.8; // Reduced volume
                 metronomeGainNode.connect(metronomeAudioContext.destination);
                 isMetronomeAudioInitialized = true;
             } catch (e) {
@@ -927,12 +960,40 @@
             }
         });
 
-        // Update the volume control to handle uninitialized audio
+        // Update the volume control to handle both metronome and beep volumes
         const volumeSlider = document.getElementById('volume');
         volumeSlider.addEventListener('input', () => {
-            let volume = volumeSlider.value / 100;
+            const volume = volumeSlider.value / 100;
+            
+            // Update metronome volume (use a curve for better perceived volume control)
+            if (metronomeGainNode) {
+                // Apply a slight curve to make lower volumes more usable
+                const curvedVolume = Math.pow(volume, 1.5);
+                metronomeGainNode.gain.value = curvedVolume * 0.8; // Scale down slightly
+            }
+            
+            // Update beep volume
             if (beepGain) {
-                beepGain.gain.value = volume * 0.5; // Scale down volume for beeps
+                beepGain.gain.value = volume; // Full range for beeps
+            }
+            
+            // Store the volume in localStorage
+            localStorage.setItem('appVolume', volumeSlider.value);
+        });
+        
+        // Load saved volume on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedVolume = localStorage.getItem('appVolume');
+            if (savedVolume !== null) {
+                volumeSlider.value = savedVolume;
+                // Trigger the input event to update the volume
+                volumeSlider.dispatchEvent(new Event('input'));
+            }
+            
+            const circle = document.querySelector('.countdown-circle');
+            if (circle) {
+                circle.style.strokeDashoffset = 678.584;
+                console.log('Initialized countdown circle');
             }
         });
 
