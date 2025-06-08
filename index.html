@@ -112,24 +112,16 @@
             margin: 2rem 0;
             text-align: center;
             background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
         }
 
-        #controls {
-            display: flex;
-            gap: 1rem;
-            justify-content: center;
-        }
-
         #controls button {
-            flex: 1;
-            padding: 1rem;
-            font-size: 1rem;
-            font-weight: 600;
+            padding: 1rem 2rem;
             border: none;
-            border-radius: var(--border-radius);
+            border-radius: 5px;
             cursor: pointer;
             transition: var(--transition);
             background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
@@ -149,22 +141,42 @@
 
         #stopButton {
             background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: white;
         }
 
         #stopButton:hover {
             background: linear-gradient(135deg, #dc2626, #b91c1c);
         }
 
+        #stopButton:active {
+            transform: translateY(0);
+        }
+
         .status-running {
             background: linear-gradient(135deg, var(--accent-color), #22c55e);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .status-walking {
-            background: linear-gradient(135deg, #60a5fa, #3b82f6);
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
         .status-stopped {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            background-clip: text;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        #controls {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
         }
 
         @media (prefers-color-scheme: light) {
@@ -233,6 +245,9 @@
         let intervalId;
         let metronomeId;
         let currentMetronomeBPM = 180;
+        let lastTime = 0;
+        let nextBeatTime = 0;
+        let isMetronomePlaying = false;
 
         const statusElement = document.getElementById('status');
         const startButton = document.getElementById('startButton');
@@ -304,7 +319,7 @@
                 stopButton.disabled = true;
                 
                 clearInterval(intervalId);
-                clearInterval(metronomeId);
+                stopMetronome();
                 
                 // Reset times and mode
                 walkTime = parseInt(walkTimeInput.value) * 60;
@@ -316,11 +331,32 @@
         }
 
         function startMetronome() {
-            clearInterval(metronomeId);
-            const interval = 60000 / currentMetronomeBPM; // Convert BPM to milliseconds
-            metronomeId = setInterval(() => {
+            isMetronomePlaying = true;
+            lastTime = performance.now();
+            nextBeatTime = lastTime + (60000 / currentMetronomeBPM);
+            metronomeId = requestAnimationFrame(metronomeLoop);
+        }
+
+        function metronomeLoop(currentTime) {
+            if (!isMetronomePlaying) return;
+
+            // Calculate time until next beat
+            const timeUntilNextBeat = nextBeatTime - currentTime;
+            
+            // If it's time for the next beat
+            if (timeUntilNextBeat <= 0) {
                 metronomeSound.play();
-            }, interval);
+                // Schedule next beat
+                nextBeatTime += 60000 / currentMetronomeBPM;
+            }
+            
+            // Continue the animation loop
+            metronomeId = requestAnimationFrame(metronomeLoop);
+        }
+
+        function stopMetronome() {
+            isMetronomePlaying = false;
+            cancelAnimationFrame(metronomeId);
         }
 
         function updateStatus() {
