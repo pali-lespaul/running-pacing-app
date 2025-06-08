@@ -466,27 +466,27 @@
         <div class="timer-input">
             <label for="walkTime">Walking Minutes</label>
             <div class="number-input">
-                <button class="number-btn" data-target="walkTime" data-action="decrease">−</button>
-                <input type="number" id="walkTime" name="walkTime" min="1" max="60" value="3" > <!-- readonly -->
-                <button class="number-btn" data-target="walkTime" data-action="increase">+</button>
+                <button type="button" class="number-btn" data-target="walkTime" data-action="decrease">−</button>
+                <input type="number" id="walkTime" name="walkTime" min="1" max="20" value="3" step="1" inputmode="numeric" pattern="[0-9]*">
+                <button type="button" class="number-btn" data-target="walkTime" data-action="increase">+</button>
             </div>
         </div>
         
         <div class="timer-input">
             <label for="runTime">Running Minutes</label>
             <div class="number-input">
-                <button class="number-btn" data-target="runTime" data-action="decrease">−</button>
-                <input type="number" id="runTime" name="runTime" min="1" max="60" value="6" > <!-- readonly -->
-                <button class="number-btn" data-target="runTime" data-action="increase">+</button>
+                <button type="button" class="number-btn" data-target="runTime" data-action="decrease">−</button>
+                <input type="number" id="runTime" name="runTime" min="1" max="20" value="6" step="1" inputmode="numeric" pattern="[0-9]*">
+                <button type="button" class="number-btn" data-target="runTime" data-action="increase">+</button>
             </div>
         </div>
         
         <div class="timer-input">
             <label for="metronome">BPM</label>
             <div class="number-input">
-                <button class="number-btn" data-target="metronome" data-action="decrease">−</button>
-                <input type="number" id="metronome" name="metronome" min="40" max="250" step="5" value="170" > <!-- readonly -->
-                <button class="number-btn" data-target="metronome" data-action="increase">+</button>
+                <button type="button" class="number-btn" data-target="metronome" data-action="decrease">−</button>
+                <input type="number" id="metronome" name="metronome" min="50" max="250" step="5" value="170" inputmode="numeric" pattern="[0-9]*">
+                <button type="button" class="number-btn" data-target="metronome" data-action="increase">+</button>
             </div>
         </div>
         
@@ -928,20 +928,56 @@
         });
 
         // Number input controls
+        document.querySelectorAll('.number-input input[type="number"]').forEach(input => {
+            // Prevent non-numeric input
+            input.addEventListener('keydown', (e) => {
+                // Allow: backspace, delete, tab, escape, enter, decimal, minus (for negative numbers)
+                if ([46, 8, 9, 27, 13, 110, 190].includes(e.keyCode) || 
+                    // Allow: Ctrl+A, Command+A
+                    (e.keyCode === 65 && (e.ctrlKey === true || e.metaKey === true)) || 
+                    // Allow: Ctrl+C, Command+C
+                    (e.keyCode === 67 && (e.ctrlKey === true || e.metaKey === true)) ||
+                    // Allow: Ctrl+X, Command+X
+                    (e.keyCode === 88 && (e.ctrlKey === true || e.metaKey === true)) ||
+                    // Allow: home, end, left, right, down, up
+                    (e.keyCode >= 35 && e.keyCode <= 40)) {
+                    // Let it happen, don't do anything
+                    return;
+                }
+                
+                // Ensure that it is a number and stop the keypress
+                if ((e.shiftKey || (e.keyCode < 48 || e.keyCode > 57)) && (e.keyCode < 96 || e.keyCode > 105)) {
+                    e.preventDefault();
+                }
+            });
+            
+            // Handle paste to prevent non-numeric input
+            input.addEventListener('paste', (e) => {
+                // Get pasted data via clipboard API
+                const pastedData = e.clipboardData.getData('text/plain');
+                // Check if the pasted data is numeric
+                if (!/^\d+$/.test(pastedData)) {
+                    e.preventDefault();
+                }
+            });
+        });
+
+        // Handle plus/minus buttons for number inputs
         document.querySelectorAll('.number-btn').forEach(button => {
-            button.addEventListener('click', function() {
+            button.addEventListener('click', function(e) {
+                e.preventDefault();
                 const targetId = this.getAttribute('data-target');
                 const action = this.getAttribute('data-action');
                 const input = document.getElementById(targetId);
-                let value = parseInt(input.value);
+                let value = parseInt(input.value) || 0;
                 const min = parseInt(input.min) || 1;
                 const max = parseInt(input.max) || 100;
                 const step = parseInt(input.step) || 1;
                 
                 if (action === 'increase') {
-                    value = Math.min(value + (targetId === 'metronome' ? 5 : 1), max);
+                    value = Math.min(value + step, max);
                 } else {
-                    value = Math.max(value - (targetId === 'metronome' ? 5 : 1), min);
+                    value = Math.max(value - step, min);
                 }
                 
                 input.value = value;
