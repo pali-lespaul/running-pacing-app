@@ -552,58 +552,103 @@
         let metronomeStartTime = null;
 
         // Create a dedicated audio context for beeps
-        const beepAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-        let beepGain = beepAudioContext.createGain();
-        beepGain.gain.value = 0.7; // Lower volume for beeps
-        beepGain.connect(beepAudioContext.destination);
+        let beepAudioContext;
+        let beepGain;
+        let isBeepAudioInitialized = false;
 
-        // Create beep oscillator
-        function createBeepOscillator() {
-            const oscillator = beepAudioContext.createOscillator();
-            oscillator.type = 'sine';
-            oscillator.frequency.value = 1000; // 1kHz beep
-            oscillator.connect(beepGain);
-            return oscillator;
-        }
-
-        // Play a beep sound
-        function playBeep() {
-            const oscillator = createBeepOscillator();
-            oscillator.start();
-            oscillator.stop(beepAudioContext.currentTime + 0.7); // 700ms beep
-        }
-
-        // Initialize metronome audio context
-        function initializeAudioContext() {
-            if (!isAudioInitialized) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                
-                // Create gain node with reduced volume
-                metronomeGain = audioContext.createGain();
-                metronomeGain.gain.value = 0.6; // Reduced volume
-                metronomeGain.connect(audioContext.destination);
-                
-                // Create metronome oscillator
-                metronomeOscillator = audioContext.createOscillator();
-                metronomeOscillator.type = 'sine';
-                metronomeOscillator.frequency.value = 440; // A4 note
-                metronomeOscillator.connect(metronomeGain);
-                
-                isAudioInitialized = true;
+        function initializeBeepAudio() {
+            if (isBeepAudioInitialized) return;
+            
+            try {
+                // Create audio context
+                beepAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+                beepGain = beepAudioContext.createGain();
+                beepGain.gain.value = 1; // Lower volume for beeps
+                beepGain.connect(beepAudioContext.destination);
+                isBeepAudioInitialized = true;
+            } catch (e) {
+                console.error('Beep audio initialization failed:', e);
             }
         }
 
-        // Add touch/click event listeners for mobile initialization
-        document.addEventListener('touchstart', initializeAudioContext, { once: true });
-        document.addEventListener('click', initializeAudioContext, { once: true });
+        // Initialize audio on any user interaction
+        document.addEventListener('click', initializeBeepAudio, { once: true });
+        document.addEventListener('touchstart', initializeBeepAudio, { once: true });
 
-        // Update volume when slider changes
-        const volumeSlider = document.getElementById('volume');
-        volumeSlider.addEventListener('input', () => {
-            let volume = volumeSlider.value / 100;
-            metronomeGain.gain.value = volume * 0.3; // Scale down volume for metronome
-            beepGain.gain.value = volume * 0.5; // Scale down volume for beeps
-        });
+        function createBeepOscillator() {
+            if (!isBeepAudioInitialized) initializeBeepAudio();
+            
+            try {
+                // Ensure audio context is running (required for iOS)
+                if (beepAudioContext && beepAudioContext.state === 'suspended') {
+                    beepAudioContext.resume();
+                }
+                
+                const oscillator = beepAudioContext.createOscillator();
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 1000; // 1kHz beep
+                oscillator.connect(beepGain);
+                return oscillator;
+            } catch (e) {
+                console.error('Error creating beep oscillator:', e);
+                return null;
+            }
+        }
+
+        function playBeep() {
+            try {
+                const oscillator = createBeepOscillator();
+                if (!oscillator) return;
+                
+                oscillator.start();
+                oscillator.stop(beepAudioContext.currentTime + 0.9); // 900ms beep
+            } catch (e) {
+                console.error('Error playing beep:', e);
+            }
+        }
+
+        // Create a dedicated audio context for metronome
+        const metronomeAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        let metronomeGainNode;
+        let isMetronomeAudioInitialized = false;
+
+        function initializeMetronomeAudio() {
+            if (isMetronomeAudioInitialized) return;
+            
+            try {
+                // Create gain node with reduced volume
+                metronomeGainNode = metronomeAudioContext.createGain();
+                metronomeGainNode.gain.value = 0.6; // Reduced volume
+                metronomeGainNode.connect(metronomeAudioContext.destination);
+                isMetronomeAudioInitialized = true;
+            } catch (e) {
+                console.error('Metronome audio initialization failed:', e);
+            }
+        }
+
+        // Initialize audio on any user interaction
+        document.addEventListener('click', initializeMetronomeAudio, { once: true });
+        document.addEventListener('touchstart', initializeMetronomeAudio, { once: true });
+
+        function createMetronomeOscillator() {
+            if (!isMetronomeAudioInitialized) initializeMetronomeAudio();
+            
+            try {
+                // Ensure audio context is running (required for iOS)
+                if (metronomeAudioContext && metronomeAudioContext.state === 'suspended') {
+                    metronomeAudioContext.resume();
+                }
+                
+                const oscillator = metronomeAudioContext.createOscillator();
+                oscillator.type = 'sine';
+                oscillator.frequency.value = 440; // A4 note
+                oscillator.connect(metronomeGainNode);
+                return oscillator;
+            } catch (e) {
+                console.error('Error creating metronome oscillator:', e);
+                return null;
+            }
+        }
 
         const startButton = document.getElementById('startButton');
         const stopButton = document.getElementById('stopButton');
@@ -713,7 +758,6 @@
                 }, 1000);
 
                 // Start metronome
-                initializeAudioContext();
                 startMetronome();
             }
         }
@@ -775,42 +819,42 @@
                 }
                 
                 // Create a subtle ticking sound
-                metronomeOscillator = audioContext.createOscillator();
+                metronomeOscillator = createMetronomeOscillator();
                 
                 // Use sine wave for a softer sound
                 metronomeOscillator.type = 'sine';
                 
                 // Create filter chain
-                const filter1 = audioContext.createBiquadFilter();
+                const filter1 = metronomeAudioContext.createBiquadFilter();
                 filter1.type = 'lowpass';
                 filter1.frequency.value = 800; // Lower frequency for softer sound
                 
-                const filter2 = audioContext.createBiquadFilter();
+                const filter2 = metronomeAudioContext.createBiquadFilter();
                 filter2.type = 'highpass';
                 filter2.frequency.value = 600; // Remove very low frequencies
                 
                 // Create gain node for volume control
-                const volumeNode = audioContext.createGain();
+                const volumeNode = metronomeAudioContext.createGain();
                 volumeNode.gain.value = 0.3; // Make it more subtle (0-0.8 instead of 0-1)
                 
                 // Connect nodes
                 metronomeOscillator.connect(filter1);
                 filter1.connect(filter2);
                 filter2.connect(volumeNode);
-                volumeNode.connect(metronomeGain);
+                volumeNode.connect(metronomeGainNode);
                 
                 // Create envelope for smooth fade-in/out
-                const envelope = audioContext.createGain();
-                envelope.gain.setValueAtTime(0, audioContext.currentTime);
-                envelope.gain.linearRampToValueAtTime(0.3, audioContext.currentTime + 0.005); // Quick fade-in
-                envelope.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.015); // Quick fade-out
+                const envelope = metronomeAudioContext.createGain();
+                envelope.gain.setValueAtTime(0, metronomeAudioContext.currentTime);
+                envelope.gain.linearRampToValueAtTime(0.3, metronomeAudioContext.currentTime + 0.005); // Quick fade-in
+                envelope.gain.linearRampToValueAtTime(0, metronomeAudioContext.currentTime + 0.015); // Quick fade-out
                 
                 // Connect envelope
                 volumeNode.connect(envelope);
-                envelope.connect(metronomeGain);
+                envelope.connect(metronomeGainNode);
                 
                 // Set frequency for the ticking sound
-                metronomeOscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                metronomeOscillator.frequency.setValueAtTime(800, metronomeAudioContext.currentTime);
                 
                 // Visual feedback
                 beatIndicator.classList.add('active');
@@ -820,7 +864,7 @@
                 
                 // Start and stop the oscillator
                 metronomeOscillator.start();
-                metronomeOscillator.stop(audioContext.currentTime + 0.015);
+                metronomeOscillator.stop(metronomeAudioContext.currentTime + 0.015);
                 
                 // Schedule next beat
                 setTimeout(playBeat, interval);
@@ -871,6 +915,15 @@
             if (circle) {
                 circle.style.strokeDashoffset = 678.584;
                 console.log('Initialized countdown circle');
+            }
+        });
+
+        // Update the volume control to handle uninitialized audio
+        const volumeSlider = document.getElementById('volume');
+        volumeSlider.addEventListener('input', () => {
+            let volume = volumeSlider.value / 100;
+            if (beepGain) {
+                beepGain.gain.value = volume * 0.5; // Scale down volume for beeps
             }
         });
 
