@@ -106,6 +106,20 @@
             box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
         }
 
+        #beatIndicator {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 255, 0.2);
+            margin: 0 auto;
+            margin-bottom: 1rem;
+            transition: background-color 0.1s;
+        }
+
+        #beatIndicator.active {
+            background-color: var(--accent-color);
+        }
+
         #status {
             font-size: 2rem;
             font-weight: 600;
@@ -225,6 +239,12 @@
             <input type="number" id="metronome" min="40" max="250" value="180">
         </div>
         
+        <div class="timer-input">
+            <label>Volume:</label>
+            <input type="range" id="volume" min="0" max="100" value="50">
+        </div>
+        
+        <div id="beatIndicator"></div>
         <div id="status" class="status-stopped">Stopped</div>
         
         <div id="controls">
@@ -235,19 +255,13 @@
 
     <script>
         // Audio elements
-        const beepSound = new Audio('src/beep.mp3');
-        const metronomeSound = new Audio('src/metronome.mp3');
-
-        let walkTime = 5 * 60; // 5 minutes in seconds
-        let runTime = 3 * 60; // 3 minutes in seconds
-        let currentMode = 'walk';
-        let isRunning = false;
+        let audioContext;
+        let metronomeOscillator;
+        let metronomeGain;
         let intervalId;
-        let metronomeId;
-        let currentMetronomeBPM = 180;
-        let lastTime = 0;
-        let nextBeatTime = 0;
         let isMetronomePlaying = false;
+        let isRunning = false;
+        let isAudioInitialized = false;
 
         const statusElement = document.getElementById('status');
         const startButton = document.getElementById('startButton');
@@ -255,6 +269,37 @@
         const walkTimeInput = document.getElementById('walkTime');
         const runTimeInput = document.getElementById('runTime');
         const metronomeInput = document.getElementById('metronome');
+        const volumeSlider = document.getElementById('volume');
+        let walkTime = parseInt(walkTimeInput.value) * 60;
+        let runTime = parseInt(runTimeInput.value) * 60;
+        let currentMode = 'walk';
+        let currentMetronomeBPM = parseInt(metronomeInput.value);
+        let volume = 0.5; // Default volume
+
+        // Initialize audio context on user interaction
+        function initializeAudioContext() {
+            if (!isAudioInitialized) {
+                // Create audio context
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Create gain node
+                metronomeGain = audioContext.createGain();
+                metronomeGain.gain.value = 0.1; // Very low volume
+                metronomeGain.connect(audioContext.destination);
+                
+                // Create a dummy oscillator to unlock audio
+                const unlockOsc = audioContext.createOscillator();
+                unlockOsc.connect(metronomeGain);
+                unlockOsc.start();
+                unlockOsc.stop(audioContext.currentTime + 0.01);
+                
+                isAudioInitialized = true;
+            }
+        }
+
+        // Add touch/click event listeners for mobile initialization
+        document.addEventListener('touchstart', initializeAudioContext, { once: true });
+        document.addEventListener('click', initializeAudioContext, { once: true });
 
         // Update times when inputs change
         walkTimeInput.addEventListener('change', () => {
@@ -267,9 +312,14 @@
 
         metronomeInput.addEventListener('change', () => {
             currentMetronomeBPM = parseInt(metronomeInput.value);
-            if (isRunning) {
+            if (isMetronomePlaying) {
                 startMetronome();
             }
+        });
+
+        volumeSlider.addEventListener('input', () => {
+            volume = volumeSlider.value / 100;
+            metronomeGain.gain.value = volume;
         });
 
         startButton.addEventListener('click', start);
@@ -281,21 +331,16 @@
                 startButton.disabled = true;
                 stopButton.disabled = false;
                 
-                // Initialize times based on input values
-                walkTime = parseInt(walkTimeInput.value) * 60;
-                runTime = parseInt(runTimeInput.value) * 60;
-                currentMode = 'walk';
+                // Initialize audio context if not already done
+                initializeAudioContext();
                 
-                // Start metronome
-                startMetronome();
-                
-                // Start timer
+                // Start interval timer
                 intervalId = setInterval(() => {
                     if (currentMode === 'walk') {
                         walkTime--;
                         updateStatus();
                         if (walkTime <= 0) {
-                            beepSound.play();
+                            playBeep(); // Play beep when transitioning
                             currentMode = 'run';
                             runTime = parseInt(runTimeInput.value) * 60;
                         }
@@ -303,23 +348,32 @@
                         runTime--;
                         updateStatus();
                         if (runTime <= 0) {
-                            beepSound.play();
+                            playBeep(); // Play beep when transitioning
                             currentMode = 'walk';
                             walkTime = parseInt(walkTimeInput.value) * 60;
                         }
                     }
                 }, 1000);
+
+                // Start metronome
+                startMetronome();
             }
         }
 
         function stop() {
             if (isRunning) {
                 isRunning = false;
+                isMetronomePlaying = false;
                 startButton.disabled = false;
                 stopButton.disabled = true;
                 
+                // Stop interval timer
                 clearInterval(intervalId);
-                stopMetronome();
+                
+                // Stop metronome
+                if (metronomeOscillator) {
+                    metronomeOscillator.stop();
+                }
                 
                 // Reset times and mode
                 walkTime = parseInt(walkTimeInput.value) * 60;
@@ -330,33 +384,73 @@
             }
         }
 
+        // Add beat indicator
+        const beatIndicator = document.getElementById('beatIndicator');
+
         function startMetronome() {
             isMetronomePlaying = true;
-            lastTime = performance.now();
-            nextBeatTime = lastTime + (60000 / currentMetronomeBPM);
-            metronomeId = requestAnimationFrame(metronomeLoop);
-        }
-
-        function metronomeLoop(currentTime) {
-            if (!isMetronomePlaying) return;
-
-            // Calculate time until next beat
-            const timeUntilNextBeat = nextBeatTime - currentTime;
+            const interval = 60000 / currentMetronomeBPM; // Convert BPM to milliseconds
             
-            // If it's time for the next beat
-            if (timeUntilNextBeat <= 0) {
-                metronomeSound.play();
+            function playBeat() {
+                if (!isMetronomePlaying) return;
+                
+                // Create a subtle ticking sound
+                metronomeOscillator = audioContext.createOscillator();
+                
+                // Use sine wave for a softer sound
+                metronomeOscillator.type = 'sine';
+                
+                // Create filter chain
+                const filter1 = audioContext.createBiquadFilter();
+                filter1.type = 'lowpass';
+                filter1.frequency.value = 800; // Lower frequency for softer sound
+                
+                const filter2 = audioContext.createBiquadFilter();
+                filter2.type = 'highpass';
+                filter2.frequency.value = 600; // Remove very low frequencies
+                
+                // Create gain node for volume control
+                const volumeNode = audioContext.createGain();
+                volumeNode.gain.value = 0.1; // Very low volume
+                
+                // Create envelope for fade-in/out
+                const envelope = audioContext.createGain();
+                envelope.gain.setValueAtTime(0, audioContext.currentTime);
+                envelope.gain.linearRampToValueAtTime(0.5, audioContext.currentTime + 0.01);
+                envelope.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.02);
+                
+                // Connect nodes
+                metronomeOscillator.connect(filter1);
+                filter1.connect(filter2);
+                filter2.connect(volumeNode);
+                volumeNode.connect(envelope);
+                envelope.connect(metronomeGain);
+                
+                // Set frequency for the ticking sound
+                metronomeOscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+                
+                // Visual feedback
+                beatIndicator.classList.add('active');
+                setTimeout(() => {
+                    beatIndicator.classList.remove('active');
+                }, 100);
+                
+                // Start and stop the oscillator
+                metronomeOscillator.start();
+                metronomeOscillator.stop(audioContext.currentTime + 0.02); // Very short duration
+                
                 // Schedule next beat
-                nextBeatTime += 60000 / currentMetronomeBPM;
+                setTimeout(playBeat, interval);
             }
             
-            // Continue the animation loop
-            metronomeId = requestAnimationFrame(metronomeLoop);
+            playBeat();
         }
 
         function stopMetronome() {
             isMetronomePlaying = false;
-            cancelAnimationFrame(metronomeId);
+            if (metronomeOscillator) {
+                metronomeOscillator.stop();
+            }
         }
 
         function updateStatus() {
@@ -366,6 +460,22 @@
             
             statusElement.textContent = `${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}: ${minutes}:${seconds.toString().padStart(2, '0')}`;
             statusElement.className = `status-${currentMode}`;
+        }
+
+        // Add beep sound
+        function playBeep() {
+            const beepOscillator = audioContext.createOscillator();
+            beepOscillator.type = 'sine';
+            beepOscillator.frequency.setValueAtTime(1000, audioContext.currentTime);
+            
+            const gainNode = audioContext.createGain();
+            gainNode.gain.setValueAtTime(0.5, audioContext.currentTime);
+            
+            beepOscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            beepOscillator.start();
+            beepOscillator.stop(audioContext.currentTime + 0.7); // Increased duration to 0.7 seconds
         }
 
         // Initial status
